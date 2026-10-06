@@ -51,7 +51,7 @@ class RateLimiter:
             )
         except Exception:
             logger.exception("限流存储不可用，按降级策略处理 key=%s", key)
-            return self._degraded_decision(rule)
+            return self._degraded_decision(key, rule)
 
         burst_used = self._effective_count(burst, now)
         if burst_used > rule.burst_limit:
@@ -108,7 +108,7 @@ class RateLimiter:
             limit=limit,
         )
 
-    def _degraded_decision(self, rule: RateLimitRule) -> Decision:
+    def _degraded_decision(self, key: str, rule: RateLimitRule) -> Decision:
         self._metrics.record_storage_error()
         self._metrics.record_degraded(allowed=self._fail_open)
         if self._fail_open:
@@ -119,7 +119,8 @@ class RateLimiter:
                 limit=rule.max_requests,
                 degraded=True,
             )
-        logger.warning("存储不可用，fail-closed 拒绝本次请求")
+        logger.warning("存储不可用，fail-closed 拒绝本次请求 key=%s", key)
+        self._metrics.record_rejected(key, RejectReason.STORAGE_UNAVAILABLE)
         return Decision(
             allowed=False,
             reason=RejectReason.STORAGE_UNAVAILABLE,
